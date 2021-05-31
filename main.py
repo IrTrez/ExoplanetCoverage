@@ -244,10 +244,10 @@ plt.ylabel('Number of visible exoplanets')
 plt.grid(which='both', axis='y')
 plt.show()
 
-'''Uncomment for confirmed and unconfirmed exoplanets'''
+'''Uncomment for confirmed and unconfirmed exoplanets - WARNING: I am not responsible by any damage to your retinas caused by the colour scheme ~N'''
 
-'''
-for quantile, colour in zip(quantiles, unconfirmed_colours):
+
+""" for quantile, colour in zip(quantiles, unconfirmed_colours):
     thingy(quantile, colour, unconfirmedGammaDF, unconfirmedGammaMin, unconfirmedGammaMax, unconfirmedGammaDiff)
 
 
@@ -257,5 +257,5 @@ plt.xlabel('Pointing angle [°]')
 plt.ylabel('Number of visible exoplanets')
 plt.grid(which='both', axis='y')
 plt.show()
+ """
 
-'''

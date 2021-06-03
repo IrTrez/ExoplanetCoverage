@@ -52,6 +52,8 @@ def teleview(raBasic: np.ndarray, lat: float = craterLatitude, lon: float = crat
     """
     return lat - (A * np.sin(np.radians(raBasic) + mrad(an) + mrad(lon-180)))
 
+#def implementPrecession(raBasic:np.ndarray, decMoon: np.ndarray, lat: float = craterLatitude, lon: float = craterLongitude, an: float = ra_of_asc_node)
+
 
 def anglesToVector(ra:np.ndarray, dec:np.ndarray) -> np.ndarray:
     """Convert angles to unit vectors
@@ -73,7 +75,7 @@ def anglesToVector(ra:np.ndarray, dec:np.ndarray) -> np.ndarray:
     for i in range(len(ra)):
 
         q1 = qt.Quaternion(axis=[0,0,1],angle = ra[i])
-        q2 = qt.Quaternion(axis=[0,1,0], angle = dec[i])
+        q2 = qt.Quaternion(axis=[0,-1,0], angle = dec[i])
         q3 = q1*q2
         vector = q3.rotate(unit_vector)
         vectors[i] = vector
@@ -114,6 +116,35 @@ def regressionHammer(exoData:pd.DataFrame):
 
     return coefficients
 
+def lunarNorthPolePosition(epochs:np.array):
+
+    E1 = (epochs*-0.0529921) + 125.045
+    E2 = (epochs*-0.1059842) + 250.089
+    E3 = 13.0120009*epochs + 260.008
+    E4 = 13.3407154*epochs + 176.625
+    E5 = 0.9856003*epochs + 357.529
+    E6 = 311.589 + 26.4057084*epochs
+    E7 = 134.963 + 13.0649930*epochs
+    E8 = 276.617 + 0.3287146*epochs
+    E9 = 34.226 + 1.7484877*epochs
+    E10 = 15.134 - 0.1589763*epochs
+    E11 = 119.743 + 0.0036096*epochs
+    E12 = 239.961 + 0.1643573*epochs
+    E13 = 25.053 + 12.9590088*epochs
+
+    right_ascension = 269.9949 + (0.0031/(365.2425*100))*epochs - 3.8787*np.sin(np.radians(E1)) \
+         - 0.1204*np.sin(np.radians(E2)) +0.0700*np.sin(np.radians(E3)) - 0.0172*np.sin(np.radians(E4)) \
+             +0.0072*np.sin(np.radians(E6)) - 0.0052*np.sin(np.radians(E10)) + 0.0043*np.sin(np.radians(E13))
+
+    declination = 66.5392 + (0.0130/(365.2425*100))*epochs + 1.5419*np.cos(np.radians(E1)) \
+        + 0.0239*np.cos(np.radians(E2)) - 0.0278*np.cos(np.radians(E3)) + 0.0068*np.cos(np.radians(E4)) \
+            - 0.0029*np.cos(np.radians(E6)) + 0.0009*np.cos(np.radians(E7)) + 0.0008*np.cos(np.radians(E10))\
+                - 0.0009*np.cos(np.radians(E13))
+
+    return right_ascension, declination
+
+
+
 
 start = datetime.now()
 
@@ -141,6 +172,12 @@ unconfirmed_exo_names = unconfirmed_exo_data.iloc[:,2].to_list()
 raBasic = np.linspace(0, raResolution, raResolution)
 decMoon = teleview(raBasic)
 
+epochs = 9132 + np.linspace(1,7305, 5000)
+
+""" raBasic, decMoon = lunarNorthPolePosition(epochs)
+decMoon = -1*decMoon
+raBasic -= 180 """
+
 raBasic[np.where(decMoon < -90)] = raBasic[np.where(decMoon < -90)] + 180
 decMoon[np.where(decMoon < -90)] = -decMoon[np.where(decMoon < -90)] - 180
 
@@ -151,7 +188,8 @@ rTelescope = anglesToVector(raBasic, decMoon)
 rExos = anglesToVector(exo_ra, exo_dec).T
 rUnconfirmedExos = anglesToVector(unconfirmed_exo_ra,unconfirmed_exo_dec).T
 
-
+plt.scatter(raBasic,decMoon)
+plt.show()
 # 3D Projection?
 '''rTelescope2 = rTelescope.T
 print(rTelescope2[0])
@@ -258,4 +296,19 @@ plt.ylabel('Number of visible exoplanets')
 plt.grid(which='both', axis='y')
 plt.show()
  """
+
+
+
+epochs = 9132 + np.linspace(1,7305, 5000)
+
+poleRa, poleDec = lunarNorthPolePosition(epochs)
+poleDec = -1*poleDec
+poleRa -= 180
+
+plt.plot(poleRa,poleDec)
+plt.title('Lunar South Pole Precession')
+plt.xlabel('Right Ascension [°]')
+plt.ylabel('Declination [°]')
+plt.grid(which='both')
+plt.show()
 

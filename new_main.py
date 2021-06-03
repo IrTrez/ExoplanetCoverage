@@ -28,13 +28,13 @@ craterLongitude = 152.0 # Longitude of the location on the Moon
 
 quantileExo = round(hrsPerExo/(moonOrbitalPeriod*24),3)
 print(f"Exoplanet quantile = {quantileExo}")
-quantilePlusTen = round(1.25*quantileExo,3)
-quantileMinusTen = round(0.75*quantileExo,3)
+quantilePlusTwentyFive = round(1.25*quantileExo,3)
+quantileMinusTwentyFive = round(0.75*quantileExo,3)
 
 #Resolution of bars on the plot (in degrees)
 barReso = 5
 # The quantiles you want
-quantiles = [quantileMinusTen,quantileExo,quantilePlusTen]
+quantiles = [quantileMinusTwentyFive,quantileExo,quantilePlusTwentyFive]
 colours = ["blue", "orange", "green", "red", 'purple'] # Colours used for the quantile bars
 unconfirmed_colours = ["yellow", "lime", "pink"] # Colours used for unconfirmed exoplanets
 
@@ -48,7 +48,7 @@ timeInDays = 9132
 timeInCenturies = timeInDays/(365.2425*100)
 
 #Mission length
-lengthInDays = 6794 # Five years
+lengthInDays = 6794 # 18.6 years (Full axial precession)
 
 
 
@@ -69,7 +69,16 @@ if moonRightAscension >= 360:
 
 
 def lunarOrbitRASimulation(duration:float):
+    """Simulates the right ascension of a perfectly circular lunar orbit. The circular orbit is an assumption
+    that might be modified in the future.
 
+    Args:
+        duration (float): Duration of the mission (lengthInDays)
+
+    Returns:
+        data (np.array): Array with column 0 containing the number of days from the beginning of
+        the simulation, and column 1 containing the right ascension of the Moon. 
+    """
     #data1 = np.transpose(np.linspace(0,duration,(duration+1)))
     data1 = np.linspace(0,duration,(duration))
     data2 = np.linspace(0, duration,(duration))
@@ -83,7 +92,19 @@ def lunarOrbitRASimulation(duration:float):
 
 
 def lunarNorthPolePosition(epochs:np.array):
+    """Calculates the position of the Moon's north pole according to the International Astronomical Union's
+    model. This is used to later calculate the effects of axial precession on the overall FOV.
 
+    For details on the model, visit:
+
+    https://astropedia.astrogeology.usgs.gov/alfresco/d/d/workspace/SpacesStore/28fd9e81-1964-44d6-a58b-fbbf61e64e15/WGCCRE2009reprint.pdf
+
+    Args:
+        epochs (np.array): The epoch according to the J2000 reference(the length in days added onto the epoch at the beginning of the mission)
+
+    Returns:
+        data (np.array): Array containing the right ascension and declination of the lunar north pole.
+    """
     E1 = (epochs*-0.0529921) + 125.045
     E2 = (epochs*-0.1059842) + 250.089
     E3 = 13.0120009*epochs + 260.008
@@ -112,8 +133,16 @@ def lunarNorthPolePosition(epochs:np.array):
     return data
 
 
-def incorporateAxialPrecession(northPoleAngles:np.ndarray):
+def incorporateAxialPrecession(northPoleAngles:np.ndarray) -> np.array:
+    """ Transforms the unit vector [1,0,0] to the angles of the north pole given by the IAU model. Yields a series of
+    vectors marking the position of the north pole.
 
+    Args:
+        northPoleAngles (np.ndarray): Angles given by the IAU model, output of lunarNorthPolePosition
+
+    Returns:
+        vectors (np.array): Vectors pointing towards the north pole over the given time of the mission.
+    """
     vectors = np.zeros([len(northPoleAngles[:,0]),3])
 
     unit_vector = np.array([1,0,0])
@@ -129,17 +158,18 @@ def incorporateAxialPrecession(northPoleAngles:np.ndarray):
     return vectors
 
 
-# -------------------------------------------------- Lunar Orbit to Telescope transformation --------------------------------------#
+def generateTelescopeVectors(polarPositionVectors:np.ndarray, rightAsc) -> np.array:
+    """Transforms the vectors provided by incorporateAxialPrecession and rotates them by the
+    latitude, and longitude of the crater and right ascension of the Moon. This represents the vectors perpendicular
+    to the surface of the crater at a given point in time.
 
+    Args:
+        polarPositionVectors (np.ndarray): Array containing vectors representing the position of the north pole.
+        rightAsc ([type]): Array containing the right ascension of the Moon in a given point of its orbit.
 
-# Generate the crater angles in the hypothetical case that the Moon's axis perfectly aligns with the coordinate system
-
-
-def generateTelescopeVectors(polarPositionVectors:np.ndarray, rightAsc):
-
-
-    
-
+    Returns:
+        vectors (np.array): Vectors perpendicular to the surface of the crater at different points in time.
+    """
     vectors = np.zeros([len(polarPositionVectors[:,0]),3])
 
 
@@ -155,15 +185,19 @@ def generateTelescopeVectors(polarPositionVectors:np.ndarray, rightAsc):
     return vectors
 
 
+def find_angles(rotatedPosition:np.ndarray) -> np.array:
+    """Finds the angles between the given vectors and the coordinate system, in order to determine the right ascension and declination
+    for plotting purposes.
 
-""" fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(rotatedVectors[:,0],rotatedVectors[:,1],rotatedVectors[:,2])
-plt.show() """
+    Note: For now, this only works for the southern hemisphere. This can be corrected by changing the sign towards the end of the function
+    (It is indicated). Will include a switch in the future.
 
+    Args:
+        rotatedPosition (np.ndarray): Crater position vectors, adjusted to axial precession.
 
-def find_angles(rotatedPosition:np.ndarray):
-
+    Returns:
+        angles (np.array): Gives the corrected right ascension and declination of the crater, displaying the path visible to the telescope.
+    """
     x_axis = [1,0,0]
     z_axis = [0,0,1]
 
@@ -193,16 +227,8 @@ def find_angles(rotatedPosition:np.ndarray):
 
     angles[:,0][np.where(angles[:,1] > 90)] = angles[:,0][np.where(angles[:,1] > 90)] + 180
     angles[:,1][np.where(angles[:,1] > 90)] = 90 - (angles[:,1][np.where(angles[:,1] > 90)] - 90)
-    #angles[:,0][np.where(angles[:,1] < -90)] = angles[:,0][np.where(angles[:,1] < -90)] + 180
-    #angles[:,1][np.where(angles[:,1] < -90)] = - angles[:,1][np.where(angles[:,1] < -90)] - 180
 
-    #raBasic[np.where(decMoon < -90)] = raBasic[np.where(decMoon < -90)] + 180
-    #decMoon[np.where(decMoon < -90)] = -decMoon[np.where(decMoon < -90)] - 180
-
-    #raBasic[np.where(raBasic > 360)] = raBasic[np.where(raBasic > 360)] - 360
-    #raBasic[np.where(raBasic < 0)] = raBasic[np.where(raBasic < 0)] + 360
-
-    angles[:,1] = -angles[:,1]
+    angles[:,1] = -angles[:,1] # Change sign here for south-north hemisphere (South: -, North: +)
 
     print(angles)
     print(f'Min RA: {min(angles[:,0])}')
@@ -254,7 +280,6 @@ def anglesToVector(ra:np.ndarray, dec:np.ndarray) -> np.ndarray:
     return vectors
 
 
-
 def quantileData(qquantile, colorBar, DF:pd.DataFrame, MinDF:pd.DataFrame,MaxDF:pd.DataFrame,DiffDF:pd.DataFrame):
     """Thingy calculates the number of visible exoplanets as a function of pointing angle for different quantiles. 
 
@@ -286,38 +311,53 @@ def quantileData(qquantile, colorBar, DF:pd.DataFrame, MinDF:pd.DataFrame,MaxDF:
 # ------------------------------------------------ RUN PROGRAM -------------------------------------- #
 
 
+# Execute lunar orbit simulation --------
+RA = lunarOrbitRASimulation(lengthInDays) 
 
-RA = lunarOrbitRASimulation(lengthInDays)
-
+# Define epoch ---------
 epoch = np.linspace(0,lengthInDays, lengthInDays) + timeInDays
 
+# Determine north pole movement from IAU model ---------
 moonNorthPoleAngles = lunarNorthPolePosition(epoch)
 averageRA = np.average(moonNorthPoleAngles[:,0])
 print(f"Average Polar Right Ascension: {averageRA}")
 
+# Create vectors for north pole position -------
 rotatedPolarVectors = incorporateAxialPrecession(moonNorthPoleAngles)
 
+# Rotate from north pole to telescope for telescope position -------
 telescopeVectors = generateTelescopeVectors(rotatedPolarVectors,RA)
 
-# Plot spherical plot
+
+# ------------- 3D plotting of the path -----------------------#
+# Plot spherical plot -------
 u, v = np.mgrid[0:2*np.pi:200j, 0:np.pi:100j]
 x = np.cos(u)*np.sin(v)
 y = np.sin(u)*np.sin(v)
 z = np.cos(v)
 
+
+# Plot path on sphere -------
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 ax.plot3D(telescopeVectors[:,0],telescopeVectors[:,1],telescopeVectors[:,2], color='red', linewidth = 0.2)
-
 ax.plot_surface(x, y, z, color="whitesmoke", alpha = 0.4)
 plt.show()
 
+
+# ----------- Plot 2D RA-Dec plot -------------
+
+# Find RA and Dec -----------
 visionAngles = find_angles(telescopeVectors)
 
-""" plt.scatter(visionAngles[:,0],visionAngles[:,1], s=0.6)
-plt.show() """
+# Plot --------
+plt.scatter(visionAngles[:,0],visionAngles[:,1], s=0.6)
+plt.show()
 
 
+# ----------------------- Exoplanet visibility --------------------------
+
+# Data reading ---------
 data = pd.read_csv(fileName, sep=',', skiprows=38)
 exo_data = data[['ra', 'dec', 'pl_name']]
 
@@ -339,12 +379,13 @@ unconfirmed_exo_ra = unconfirmed_exo_data.iloc[:,0].to_numpy()
 unconfirmed_exo_dec = unconfirmed_exo_data.iloc[:,1].to_numpy()
 unconfirmed_exo_names = unconfirmed_exo_data.iloc[:,2].to_list()
 
+
+# Turn exoplanet angular positions into position vectors -----------
 rExos = anglesToVector(exo_ra, exo_dec).T
 rUnconfirmedExos = anglesToVector(unconfirmed_exo_ra,unconfirmed_exo_dec).T
 
 
-
-
+# Find angles between telescope and every single exoplanet -----------
 gamma = getGamma(telescopeVectors, rExos)
 gammaMin = pd.DataFrame([np.min(gamma, axis=0)], columns=exo_names)
 gammaMax = pd.DataFrame([np.max(gamma, axis=0)], columns=exo_names)
@@ -364,10 +405,13 @@ unconfirmedGammaDiff = pd.DataFrame([np.max(unconfirmedGamma, axis=0)- np.min(un
 unconfirmedGammaDF = pd.DataFrame(unconfirmedGamma, columns=unconfirmed_exo_names)
 
 
+# Compare every exoplanet angle with different FOV ------------------
+
+
 for quantile, color in zip(quantiles, colours):
     quantileData(quantile, color, gammaDF, gammaMin, gammaMax, gammaDiff)
 
-'''Uncomment for confirmed and unconfirmed exoplanets'''
+'''Uncomment for confirmed and unconfirmed exoplanets. WARNING: I do not take responsibility for any damage to your retinas caused by the colour scheme. ~N.'''
 
 #for quantile, colour in zip(quantiles, unconfirmed_colours):
     #thingy(quantile, colour, unconfirmedGammaDF, unconfirmedGammaMin, unconfirmedGammaMax, unconfirmedGammaDiff)
@@ -380,9 +424,3 @@ plt.xlabel('Pointing angle [°]')
 plt.ylabel('Number of visible exoplanets')
 plt.grid(which='both', axis='y')
 plt.show()
-
-
-
-
-
-

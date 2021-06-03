@@ -281,7 +281,7 @@ def anglesToVector(ra:np.ndarray, dec:np.ndarray) -> np.ndarray:
 
 
 def quantileData(qquantile, colorBar, DF:pd.DataFrame, MinDF:pd.DataFrame,MaxDF:pd.DataFrame,DiffDF:pd.DataFrame):
-    """Thingy calculates the number of visible exoplanets as a function of pointing angle for different quantiles. 
+    """quantileData alculates the number of visible exoplanets as a function of pointing angle for different quantiles. 
 
     Args:
         qquantile ([type]): An array of quantiles to calculate

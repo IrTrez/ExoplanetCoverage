@@ -9,6 +9,9 @@ from math import cos, sin, asin, acos, atan2, tan
 from math import radians as mrad
 from numba import njit, jit
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import *
+from celluloid import Camera
+
 
 
 
@@ -408,8 +411,8 @@ unconfirmedGammaDF = pd.DataFrame(unconfirmedGamma, columns=unconfirmed_exo_name
 # Compare every exoplanet angle with different FOV ------------------
 
 
-for quantile, color in zip(quantiles, colours):
-    quantileData(quantile, color, gammaDF, gammaMin, gammaMax, gammaDiff)
+""" for quantile, color in zip(quantiles, colours):
+    quantileData(quantile, color, gammaDF, gammaMin, gammaMax, gammaDiff) """
 
 '''Uncomment for confirmed and unconfirmed exoplanets. WARNING: I do not take responsibility for any damage to your retinas caused by the colour scheme. ~N.'''
 
@@ -418,9 +421,144 @@ for quantile, color in zip(quantiles, colours):
 
 
 
-plt.legend()
+""" plt.legend()
 plt.title('Confirmed Exoplanets in sight as a function of pointing angle')
 plt.xlabel('Pointing angle [°]')
 plt.ylabel('Number of visible exoplanets')
 plt.grid(which='both', axis='y')
+plt.show() """
+
+
+# ------------------------------------------------- Animation ------------------------------------------- #
+
+
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+u, v = np.mgrid[0:2*np.pi:50j, 0:np.pi:50j]
+x = np.cos(u)*np.sin(v)
+y = np.sin(u)*np.sin(v)
+z = np.cos(v)
+ax.plot_wireframe(x, y, z, color="grey", alpha = 0.2)
+#ax.plot_surface(x, y, z, color="whitesmoke", alpha = 0.4)
+
+pathX = []
+pathY = []
+pathZ = []
+
+lineOrigin = []
+lineX = [0]
+lineY = [0]
+lineZ = [0]
+
+lineX.append(telescopeVectors[0,0])
+lineY.append(telescopeVectors[0,1])
+lineZ.append(telescopeVectors[0,2])
+
+pathX.append(telescopeVectors[0,0])
+pathY.append(telescopeVectors[0,1])
+pathZ.append(telescopeVectors[0,2])
+
+# Create FOV limit:
+
+""" fovAngle = 85
+rFOV  = np.zeros([len(telescopeVectors[:,0]),3])
+
+unit_vector = np.array([1,0,0])
+
+vectors = np.zeros([len(telescopeVectors[:,0]),3])
+
+
+for i in range(len(telescopeVectors[:,0])):
+
+    q1 = qt.Quaternion(axis=[0,-1,0], angle = fovAngle - 90)
+
+    vector = q1.rotate(telescopeVectors[i,:])
+    vectors[i,:] = vector """
+
+
+
+
+
+line, = ax.plot3D(lineX,lineY,lineZ, color="red")
+path, = ax.plot3D(pathX,pathY,pathZ, color="red")
+#fov, = ax.plot3D(vectors[:,0],vectors[:,1],vectors[:,2])
+
+
+'''It's not elegant, but it works'''
+
+def animate(i): 
+
+    global vectors
+    vectors = telescopeVectors
+
+    lineX[1] = vectors[i,0]
+    lineY[1] = vectors[i,1]
+    lineZ[1] = vectors[i,2]
+    lineXArray = np.array(lineX)
+    lineYArray = np.array(lineY)
+    lineZArray = np.array(lineZ)
+
+    pathX.append(vectors[i,0])
+    pathY.append(vectors[i,1])
+    pathZ.append(vectors[i,2])
+    pathXArray = np.array(pathX)
+    pathYArray = np.array(pathY)
+    pathZArray = np.array(pathZ)
+
+    line.set_xdata(lineXArray)
+    line.set_ydata(lineYArray)
+    line.set_3d_properties(lineZArray)
+
+    path.set_xdata(pathXArray)
+    path.set_ydata(pathYArray)
+    path.set_3d_properties(pathZArray)
+
+
+
+
+animation = FuncAnimation(fig, func=animate, frames = np.arange(0,lengthInDays,3), interval = 0.01, save_count=2265, repeat=False)
+
+
+f = r"animation.gif" 
+writergif = PillowWriter(fps=24) 
+animation.save(f, writer=writergif)
+
+
+#lineAnimation = FuncAnimation(fig, func=lineAnimationFrame, frames = np.arange(1,lengthInDays,1))
+#pathAnimation = FuncAnimation(fig, func=pathAnimationFrame, frames = np.arange(1,lengthInDays,1))
 plt.show()
+
+
+
+
+
+""" def lineAnimationFrame(i):
+
+    linePlot[1,:] = telescopeVectors[i,:]
+
+    line.set_xdata(linePlot[:,0])
+    line.set_ydata(linePlot[:,1])
+    line.set_3d_properties(linePlot[:,2])
+
+    
+    return line,
+
+def pathAnimationFrame(i):
+
+    global pathPlotGlobal
+    if i == 1:
+        pathPlotGlobal = pathPlot
+        
+    pathPlotTemp = np.vstack([pathPlotGlobal, telescopeVectors[i]])
+    pathPlotGlobal = pathPlotTemp
+    path.set_xdata(pathPlotTemp[i,0])
+    path.set_ydata(pathPlotTemp[i,1])
+    path.set_3d_properties(pathPlotTemp[i,2])
+
+    return path,
+
+pathFrame = np.arange(1,lengthInDays,1) """
+
+
+
+

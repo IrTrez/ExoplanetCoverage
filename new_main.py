@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pyquaternion as qt #You will need to install this, sOrRy tRIsTaN <3
 import sklearn.linear_model as lm
+import seaborn as sns
 from tqdm import tqdm as tqdm
 from datetime import datetime
 from math import cos, sin, asin, acos, atan2, tan
@@ -47,11 +48,11 @@ unconfirmed_colours = ["yellow", "lime", "pink"] # Colours used for unconfirmed 
 
 
 #Days since January 1st, 2000. (J2000)
-timeInDays = 9132
+timeInDays = 9131 # January 1st, 2025
 timeInCenturies = timeInDays/(365.2425*100)
 
 #Mission length
-lengthInDays = 6794 # 18.6 years (Full axial precession)
+lengthInDays = 6794 # 18.6 years (Full axial precession) # 6794
 
 
 
@@ -180,7 +181,7 @@ def generateTelescopeVectors(polarPositionVectors:np.ndarray, rightAsc) -> np.ar
 
         q1 = qt.Quaternion(axis=[0,0,1],angle = np.radians(craterLongitude) + np.radians(rightAsc[i,1]))
         q2 = qt.Quaternion(axis=[0,-1,0], angle = np.radians(craterLatitude) - np.radians(90))
-        q3 = q2*q1
+        q3 = q1*q2
 
         vector = q3.rotate(polarPositionVectors[i,:])
         vectors[i,:] = vector
@@ -201,35 +202,80 @@ def find_angles(rotatedPosition:np.ndarray) -> np.array:
     Returns:
         angles (np.array): Gives the corrected right ascension and declination of the crater, displaying the path visible to the telescope.
     """
-    x_axis = [1,0,0]
+
+    xyPlaneNormal = np.array([0,0,1]).T
+    xzModulus = np.zeros([len(rotatedPosition[:,0])])
+    xz_projection = np.delete(rotatedPosition, 2, 1)
+    xUnitVector = np.zeros([len(rotatedPosition[:,0]),2])
+
+    for i in range(len(rotatedPosition[:,0])):
+    
+        xzModulus[i] = np.linalg.norm(xz_projection[i,:])
+        xUnitVector[i,:] = [1,0]
+
+    angleRA = np.zeros([len(rotatedPosition[:,0]),1])
+
+    for i in range(len(rotatedPosition[:,0])):
+
+
+        angle = atan2(xz_projection[i,1],xz_projection[i,0])
+        angleRA[i] = np.degrees(angle)
+        #dot = np.dot(xz_projection[i,:], xUnitVector[i,:].T)
+        #ar = np.vstack([xz_projection[i,:],xUnitVector[i,:].T])
+        #det = np.linalg.det(ar)
+        #angleRA[i] = np.degrees(atan2(det,dot))
+        #angleRA[i] = np.degrees(np.arccos(np.dot(xz_projection[i,:],xUnitVector[i,:].T) / xzModulus[i]))
+
+    angleRA[np.where(angleRA<0)] = 360 + angleRA[np.where(angleRA<0)]
+    
+    angleDec = np.degrees(np.arcsin(np.dot(rotatedPosition,xyPlaneNormal)))
+    
+
+    angles = np.vstack([angleRA.T,angleDec])
+    angles[:,0][np.where(angles[:,1] > 90)] = angles[:,0][np.where(angles[:,1] > 90)] + 180
+    angles[:,1][np.where(angles[:,1] > 90)] = 90 - (angles[:,1][np.where(angles[:,1] > 90)] - 90)
+    print(max(angleRA))
+    # Hotfix
+    ind = np.argmax(angles[0,:], axis=0)
+    print(angles[0,ind])
+    angles[0,ind:] = 360 - angles[0,ind:]
+
+    # This only fixes the problem for one orbit; you need to make it work for all of them.
+
+
+    '''x_axis = [1,0,0]
     z_axis = [0,0,1]
 
     xy_projection = np.delete(rotatedPosition, 2, 1)
-    xz_projection = np.delete(rotatedPosition, 0, 1)
-    xUnitVector = np.zeros([2,len(rotatedPosition[:,0])])
-    zUnitVector = np.zeros([2,len(rotatedPosition[:,0])])
+    
+    xUnitVector = np.zeros([len(rotatedPosition[:,0]),2])
+    
     
 
     angles = np.zeros([len(rotatedPosition[:,0]),2])
     xyModulus = np.zeros([len(rotatedPosition[:,0])])
-    xzModulus = np.zeros([len(rotatedPosition[:,0])])
+    
 
     for i in range(len(rotatedPosition[:,0])):
     
         xyModulus[i] = np.linalg.norm(xy_projection[i,:])
         xzModulus[i] = np.linalg.norm(xz_projection[i,:])
-        xUnitVector[:,i] = [1,0]
-        zUnitVector[:,i] = [0,1]
+        xUnitVector[i,:] = [1,0]
+        zUnitVector[i,:] = [0,1]
 
         # FIND ANGLE BETWEEN VECTORS
 
+    print(xUnitVector)
+    print(zUnitVector)
+
     for i in range(len(rotatedPosition[:,0])):
 
-        angles[i,0] = np.degrees(acos(np.dot(xy_projection[i,:], xUnitVector[:,i]) / xyModulus[i]))
-        angles[i,1] = np.degrees(acos(np.dot(xz_projection[i,:],xUnitVector[:,i]) / xzModulus[i]))
+        angles[i,0] = np.degrees(np.arccos(np.dot(xy_projection[i,:], xUnitVector[i,:].T) / xyModulus[i]))
+        angles[i,1] = np.degrees(np.arccos(np.dot(xz_projection[i,:],xUnitVector[i,:].T) / xzModulus[i]))
 
     angles[:,0][np.where(angles[:,1] > 90)] = angles[:,0][np.where(angles[:,1] > 90)] + 180
     angles[:,1][np.where(angles[:,1] > 90)] = 90 - (angles[:,1][np.where(angles[:,1] > 90)] - 90)
+    #decMoon[np.where(decMoon < -90)] = -decMoon[np.where(decMoon < -90)] - 180
 
     angles[:,1] = -angles[:,1] # Change sign here for south-north hemisphere (South: -, North: +)
 
@@ -237,7 +283,7 @@ def find_angles(rotatedPosition:np.ndarray) -> np.array:
     print(f'Min RA: {min(angles[:,0])}')
     print(f'Min DEC: {min(angles[:,1])}')
     print(f'Max RA: {max(angles[:,0])}')
-    print(f'Max DEC: {max(angles[:,1])}')
+    print(f'Max DEC: {max(angles[:,1])}')'''
 
     return angles
 
@@ -321,9 +367,26 @@ RA = lunarOrbitRASimulation(lengthInDays)
 epoch = np.linspace(0,lengthInDays, lengthInDays) + timeInDays
 
 # Determine north pole movement from IAU model ---------
+
+plt.rc('font', size=32)
+plt.rc('axes', titlesize=32)     # fontsize of the axes title
+plt.rc('axes', labelsize=32)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=32)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=32)    # fontsize of the tick labels
+plt.rc('legend', fontsize=26)    # legend fontsize
+
 moonNorthPoleAngles = lunarNorthPolePosition(epoch)
 averageRA = np.average(moonNorthPoleAngles[:,0])
 print(f"Average Polar Right Ascension: {averageRA}")
+fig, ax = plt.subplots()
+ax.plot(moonNorthPoleAngles[:,0],moonNorthPoleAngles[:,1], label='Lunar north pole orientation')
+plt.title('Lunar Axial Precession according to the IAU model')
+ax.grid(which='both')
+plt.ylabel('Declination [°]')
+plt.xlabel('Right Ascension [°]')
+ax.legend()
+ax.set_aspect('equal')
+plt.show()
 
 # Create vectors for north pole position -------
 rotatedPolarVectors = incorporateAxialPrecession(moonNorthPoleAngles)
@@ -334,31 +397,30 @@ telescopeVectors = generateTelescopeVectors(rotatedPolarVectors,RA)
 
 # ------------- 3D plotting of the path -----------------------#
 # Plot spherical plot -------
-u, v = np.mgrid[0:2*np.pi:200j, 0:np.pi:100j]
+u, v = np.mgrid[0:2*np.pi:25j, 0:np.pi:25j]
 x = np.cos(u)*np.sin(v)
 y = np.sin(u)*np.sin(v)
 z = np.cos(v)
 
 
+
 # Plot path on sphere -------
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
+# make the panes transparent
+ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+# make the grid lines transparent
+ax.xaxis._axinfo["grid"]['color'] =  (1,1,1,0)
+ax.yaxis._axinfo["grid"]['color'] =  (1,1,1,0)
+ax.zaxis._axinfo["grid"]['color'] =  (1,1,1,0)
 ax.plot3D(telescopeVectors[:,0],telescopeVectors[:,1],telescopeVectors[:,2], color='red', linewidth = 0.2)
-ax.plot_surface(x, y, z, color="whitesmoke", alpha = 0.4)
+ax.plot_wireframe(x, y, z, color="grey", alpha = 0.4)
 plt.show()
 
 
 # ----------- Plot 2D RA-Dec plot -------------
-
-# Find RA and Dec -----------
-visionAngles = find_angles(telescopeVectors)
-
-# Plot --------
-plt.scatter(visionAngles[:,0],visionAngles[:,1], s=0.6)
-plt.show()
-
-
-# ----------------------- Exoplanet visibility --------------------------
 
 # Data reading ---------
 data = pd.read_csv(fileName, sep=',', skiprows=38)
@@ -366,6 +428,71 @@ exo_data = data[['ra', 'dec', 'pl_name']]
 
 unconfirmed_data = pd.read_csv(unconfirmedFileName, sep=',', skiprows=50)
 unconfirmed_exo_data = unconfirmed_data[['ra','dec','pl_name']]
+
+# Find RA and Dec -----------
+visionAngles = find_angles(telescopeVectors)
+
+# Plot --------
+
+plt.rc('font', size=32)          # controls default text sizes
+#plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+#plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+#plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+#plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+#plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+#plt.rc('figure', titlesize=BIGGER_SIZE)
+
+ax = plt.subplot()
+plt.scatter(visionAngles[0,:],visionAngles[1,:], label='Telescope vector path')
+plt.title('Debug plot')
+plt.legend()
+plt.grid(which='both')
+plt.xlabel('Right Ascension [°]')
+plt.ylabel('Declination [°]')
+ax.set_xlim(0,360)
+plt.show()
+
+np.savetxt("visionAngles.csv", visionAngles, delimiter=",")
+
+
+fig, ax = plt.subplots()
+
+sns.set_theme()
+ax.set_ylim(-90,90)
+ax.set_xlim(0,360)
+ax.set_facecolor("k")
+hlines = np.linspace(-90,90,5)
+vlines = np.linspace(0,360,6)
+# grid
+plt.hlines(hlines, 0,360, color= "gray", linestyles="--",zorder=0, linewidths=0.5)
+plt.vlines(vlines, -90, 90, color= "gray", linestyles="--",zorder=0, linewidths=0.5)
+
+#tele
+plt.scatter(visionAngles[0,:], visionAngles[1,:], c = "r", s = 0.1, linewidth=3)
+# exo
+plt.scatter(data['ra'], data['dec'], s=1.5, marker="*",
+            c="white", alpha=0.6, label=None)
+#galaxy
+galactic = np.zeros(1000)
+galactic_angle = np.linspace(0,360,1000)
+for i in range(1000):
+
+    galactic[i] = 60*cos(galactic_angle[i]*np.pi/180)
+plt.plot(galactic_angle, galactic, linestyle='--', label="Galactic plane", linewidth=3)
+# dummy
+plt.plot((-100, -90), (-180, -170),c = "r", label="Telescope path", linewidth=3)
+plt.scatter(-100, -180, marker="*",
+            c="white",label="Confirmed exoplanets")
+plt.ylabel("Declination [°]")
+plt.xlabel("Right Ascension [°]")
+plt.title("Observable region")
+plt.legend()
+plt.show()
+
+
+# ----------------------- Exoplanet visibility --------------------------
+
+
 
 print(f"Total exoplanets = {len(exo_data)}")
 print(f"Total exoplanets below 18 dec = {len(exo_data[exo_data['dec'] < 18])}")
@@ -411,8 +538,8 @@ unconfirmedGammaDF = pd.DataFrame(unconfirmedGamma, columns=unconfirmed_exo_name
 # Compare every exoplanet angle with different FOV ------------------
 
 
-""" for quantile, color in zip(quantiles, colours):
-    quantileData(quantile, color, gammaDF, gammaMin, gammaMax, gammaDiff) """
+for quantile, color in zip(quantiles, colours):
+    quantileData(quantile, color, gammaDF, gammaMin, gammaMax, gammaDiff)
 
 '''Uncomment for confirmed and unconfirmed exoplanets. WARNING: I do not take responsibility for any damage to your retinas caused by the colour scheme. ~N.'''
 
@@ -421,12 +548,12 @@ unconfirmedGammaDF = pd.DataFrame(unconfirmedGamma, columns=unconfirmed_exo_name
 
 
 
-""" plt.legend()
+plt.legend()
 plt.title('Confirmed Exoplanets in sight as a function of pointing angle')
 plt.xlabel('Pointing angle [°]')
 plt.ylabel('Number of visible exoplanets')
 plt.grid(which='both', axis='y')
-plt.show() """
+plt.show()
 
 
 # ------------------------------------------------- Animation ------------------------------------------- #
@@ -458,30 +585,49 @@ pathX.append(telescopeVectors[0,0])
 pathY.append(telescopeVectors[0,1])
 pathZ.append(telescopeVectors[0,2])
 
+#Polar vector
+
+poleX = []
+poleY = []
+poleZ = []
+
+poleX.append(-rotatedPolarVectors[0,0])
+poleX.append(rotatedPolarVectors[0,0])
+poleY.append(-rotatedPolarVectors[0,1])
+poleY.append(rotatedPolarVectors[0,1])
+poleZ.append(-rotatedPolarVectors[0,2])
+poleZ.append(rotatedPolarVectors[0,2])
+
 # Create FOV limit:
 
-""" fovAngle = 85
+fovAngle = 85
 rFOV  = np.zeros([len(telescopeVectors[:,0]),3])
 
 unit_vector = np.array([1,0,0])
 
-vectors = np.zeros([len(telescopeVectors[:,0]),3])
+FOVvectors = np.zeros([len(telescopeVectors[:,0]),3])
 
 
-for i in range(len(telescopeVectors[:,0])):
+for i in range(len(rotatedPolarVectors[:,0])):
 
-    q1 = qt.Quaternion(axis=[0,-1,0], angle = fovAngle - 90)
-
-    vector = q1.rotate(telescopeVectors[i,:])
-    vectors[i,:] = vector """
-
-
-
+    q1 = qt.Quaternion(axis=[0,0,1],angle = np.radians(craterLongitude) + np.radians(RA[i,1]))
+    q2 = qt.Quaternion(axis=[0,-1,0], angle = np.radians(craterLatitude) + np.radians(fovAngle) - np.radians(90))
+    q3 = q1*q2
+    vector = q3.rotate(rotatedPolarVectors[i,:])
+    FOVvectors[i,:] = vector
 
 
-line, = ax.plot3D(lineX,lineY,lineZ, color="red")
+
+
+
+line, = ax.plot3D(lineX,lineY,lineZ, color="red", label='Observation path')
 path, = ax.plot3D(pathX,pathY,pathZ, color="red")
-#fov, = ax.plot3D(vectors[:,0],vectors[:,1],vectors[:,2])
+fov, = ax.plot3D(FOVvectors[0,0],FOVvectors[0,1],FOVvectors[0,2], color='blue', label=f'FOV Limit: {fovAngle} degrees')
+polepath, = ax.plot3D(rotatedPolarVectors[0,0],rotatedPolarVectors[0,1],rotatedPolarVectors[0,2], color = 'black', label='Pole Precession')
+pole, = ax.plot3D(poleX,poleY,poleZ, color = 'black')
+
+
+
 
 
 '''It's not elegant, but it works'''
@@ -505,6 +651,18 @@ def animate(i):
     pathYArray = np.array(pathY)
     pathZArray = np.array(pathZ)
 
+
+    poleX[0] = -rotatedPolarVectors[i,0]
+    poleX[1] = rotatedPolarVectors[i,0]
+    poleY[0] = -rotatedPolarVectors[i,1]
+    poleY[1] = rotatedPolarVectors[i,1]
+    poleZ[0] = -rotatedPolarVectors[i,2]
+    poleZ[1] = rotatedPolarVectors[i,2]
+
+    poleXArray = np.array(poleX)
+    poleYArray = np.array(poleY)
+    poleZArray = np.array(poleZ)
+
     line.set_xdata(lineXArray)
     line.set_ydata(lineYArray)
     line.set_3d_properties(lineZArray)
@@ -513,22 +671,52 @@ def animate(i):
     path.set_ydata(pathYArray)
     path.set_3d_properties(pathZArray)
 
+    fov.set_xdata(FOVvectors[0:i,0])
+    fov.set_ydata(FOVvectors[0:i,1])
+    fov.set_3d_properties(FOVvectors[0:i,2])
+
+    polepath.set_xdata(rotatedPolarVectors[0:i,0])
+    polepath.set_ydata(rotatedPolarVectors[0:i,1])
+    polepath.set_3d_properties(rotatedPolarVectors[0:i,2])
+
+    pole.set_xdata(poleXArray)
+    pole.set_ydata(poleYArray)
+    pole.set_3d_properties(poleZArray)
+
+    
+
 
 
 
 animation = FuncAnimation(fig, func=animate, frames = np.arange(0,lengthInDays,3), interval = 0.01, save_count=2265, repeat=False)
 
 
-f = r"animation.gif" 
-writergif = PillowWriter(fps=24) 
-animation.save(f, writer=writergif)
-
-
-#lineAnimation = FuncAnimation(fig, func=lineAnimationFrame, frames = np.arange(1,lengthInDays,1))
-#pathAnimation = FuncAnimation(fig, func=pathAnimationFrame, frames = np.arange(1,lengthInDays,1))
+plt.title('Observation angle motion (Period: 18.6 years)')
+plt.legend()
 plt.show()
 
 
+
+
+
+""" f = r"animation.gif" 
+writergif = PillowWriter(fps=24) 
+animation.save(f, writer=writergif)
+ """
+
+
+
+""" fig = plt.figure(figsize=(8, 8))
+m = Basemap(projection='lcc', resolution=None,
+            lon_0=0, lat_0=50, lat_1=45, lat_2=55,
+            width=1.6E7, height=1.2E7)
+draw_map(m) """
+
+
+
+
+
+""" plt.show() """
 
 
 

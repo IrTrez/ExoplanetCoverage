@@ -24,7 +24,7 @@ moonOrbitalPeriod = 28 # Days
 hrsPerExo = 150 # Hours of observation time
 raOfAscNode = 125.08 # Right ascension of the ascending node - Constant value for lunar orbit
 initialArgOfPeriapseMoon = 60.78357656807530 # Argument of Periapse of the Moon - Constant value based on J2000.
-craterLatitude = -88.5 # Latitude of the location on the Moon
+craterLatitude = -34 # Latitude of the location on the Moon
 craterLongitude = 152.0 # Longitude of the location on the Moon
 
 
@@ -174,16 +174,29 @@ def generateTelescopeVectors(polarPositionVectors:np.ndarray, rightAsc) -> np.ar
     Returns:
         vectors (np.array): Vectors perpendicular to the surface of the crater at different points in time.
     """
+
     vectors = np.zeros([len(polarPositionVectors[:,0]),3])
 
 
     for i in range(len(polarPositionVectors[:,0])):
 
-        q1 = qt.Quaternion(axis=[0,0,1],angle = np.radians(craterLongitude) + np.radians(rightAsc[i,1]))
-        q2 = qt.Quaternion(axis=[0,-1,0], angle = np.radians(craterLatitude) - np.radians(90))
-        q3 = q1*q2
+        q1 = qt.Quaternion(axis=polarPositionVectors[i,:],angle = np.radians(craterLongitude) + np.radians(rightAsc[i,1]))
+        new_vector_x = 1*np.cos(np.radians(rightAsc[i,1]+craterLongitude))
+        new_vector_y = 1*np.sin(np.radians(rightAsc[i,1]+craterLongitude))
+        new_vector_z = (-new_vector_x*polarPositionVectors[i,0] - new_vector_y*polarPositionVectors[i,1])/polarPositionVectors[i,2]
+        orth = np.array([new_vector_x,new_vector_y,new_vector_z])
+
+        q2 = qt.Quaternion(axis=orth, angle = np.radians(craterLatitude) - np.radians(90))
+        q3 = q2*q1
 
         vector = q3.rotate(polarPositionVectors[i,:])
+        vectors[i,:] = vector
+
+    for i in range(len(polarPositionVectors[:,0])):
+
+        q1 = qt.Quaternion(axis = polarPositionVectors[i,:], angle = np.radians(angularRateMoon*i))
+
+        vector = q1.rotate(vectors[i,:])
         vectors[i,:] = vector
 
     return vectors
@@ -226,19 +239,21 @@ def find_angles(rotatedPosition:np.ndarray) -> np.array:
         #angleRA[i] = np.degrees(atan2(det,dot))
         #angleRA[i] = np.degrees(np.arccos(np.dot(xz_projection[i,:],xUnitVector[i,:].T) / xzModulus[i]))
 
-    angleRA[np.where(angleRA<0)] = 360 + angleRA[np.where(angleRA<0)]
     
-    angleDec = np.degrees(np.arcsin(np.dot(rotatedPosition,xyPlaneNormal)))
+    
+    angleDec = np.degrees(np.arcsin(np.dot(rotatedPosition,xyPlaneNormal))) # Formula from my high school maths textbook
     
 
-    angles = np.vstack([angleRA.T,angleDec])
+    angles = np.vstack([angleRA.T,angleDec]).T
     angles[:,0][np.where(angles[:,1] > 90)] = angles[:,0][np.where(angles[:,1] > 90)] + 180
     angles[:,1][np.where(angles[:,1] > 90)] = 90 - (angles[:,1][np.where(angles[:,1] > 90)] - 90)
-    print(max(angleRA))
+    angles[:,0][np.where(angles[:,0] < 0)] = 360 + angles[:,0][np.where(angles[:,0] < 0)]
+    angles[:,0][np.where(angles[:,0] > 360)] = angles[:,0][np.where(angles[:,0] > 360)] - 360
+    """print(max(angleRA))
     # Hotfix
     ind = np.argmax(angles[0,:], axis=0)
     print(angles[0,ind])
-    angles[0,ind:] = 360 - angles[0,ind:]
+    angles[0,ind:] = 360 - angles[0,ind:]"""
 
     # This only fixes the problem for one orbit; you need to make it work for all of them.
 
@@ -285,7 +300,7 @@ def find_angles(rotatedPosition:np.ndarray) -> np.array:
     print(f'Max RA: {max(angles[:,0])}')
     print(f'Max DEC: {max(angles[:,1])}')'''
 
-    return angles
+    return angles.T
 
 
 def getGamma(tel:np.ndarray, exos:np.ndarray) -> np.ndarray:
@@ -688,7 +703,7 @@ def animate(i):
 
 
 
-animation = FuncAnimation(fig, func=animate, frames = np.arange(0,lengthInDays,3), interval = 0.01, save_count=2265, repeat=False)
+animation = FuncAnimation(fig, func=animate, frames = np.arange(0,lengthInDays,1), interval = 0.01, save_count=6794, repeat=False)
 
 
 plt.title('Observation angle motion (Period: 18.6 years)')
@@ -699,10 +714,9 @@ plt.show()
 
 
 
-""" f = r"animation.gif" 
+f = r"animation.gif" 
 writergif = PillowWriter(fps=24) 
 animation.save(f, writer=writergif)
- """
 
 
 
@@ -745,7 +759,7 @@ def pathAnimationFrame(i):
 
     return path,
 
-pathFrame = np.arange(1,lengthInDays,1) """
+pathFrame = np.arange(1,lengthInDays,1)"""
 
 
 

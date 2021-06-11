@@ -1,6 +1,5 @@
 # Custom
-data*
-*.csv
+data
 .vscode
 
 
